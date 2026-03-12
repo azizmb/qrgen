@@ -150,14 +150,18 @@
       font-size: 0.85rem;
     }
 
-    .btn-download {
-      width: 100%;
+    .btn-row {
+      display: flex;
+      gap: 0.75rem;
+    }
+
+    .btn-download,
+    .btn-share {
+      flex: 1;
       padding: 0.75rem 1rem;
       font-size: 0.95rem;
       font-weight: 600;
       font-family: inherit;
-      color: #ffffff;
-      background: var(--color-accent);
       border: none;
       border-radius: 7px;
       cursor: pointer;
@@ -168,21 +172,40 @@
       gap: 0.5rem;
     }
 
+    .btn-download {
+      color: #ffffff;
+      background: var(--color-accent);
+    }
+
+    .btn-share {
+      color: var(--color-accent);
+      background: var(--color-accent-light);
+    }
+
     .btn-download:hover:not(:disabled) {
       background: var(--color-accent-hover);
       box-shadow: 0 2px 8px rgba(37, 99, 235, 0.3);
     }
 
-    .btn-download:active:not(:disabled) {
+    .btn-share:hover:not(:disabled) {
+      background: #dbeafe;
+      box-shadow: 0 2px 8px rgba(37, 99, 235, 0.15);
+    }
+
+    .btn-download:active:not(:disabled),
+    .btn-share:active:not(:disabled) {
       transform: scale(0.98);
     }
 
-    .btn-download:disabled {
-      background: #c0c0c0;
+    .btn-download:disabled,
+    .btn-share:disabled {
+      background: #f0f0f0;
+      color: #c0c0c0;
       cursor: not-allowed;
     }
 
-    .btn-download svg {
+    .btn-download svg,
+    .btn-share svg {
       width: 16px;
       height: 16px;
       flex-shrink: 0;
@@ -233,13 +256,23 @@
         </div>
       </div>
 
-      <button class="btn-download" id="btn-download" disabled>
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M12 3v13M7 11l5 5 5-5"/>
-          <path d="M3 19h18"/>
-        </svg>
-        Download PNG
-      </button>
+      <div class="btn-row">
+        <button class="btn-download" id="btn-download" disabled>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 3v13M7 11l5 5 5-5"/>
+            <path d="M3 19h18"/>
+          </svg>
+          Download
+        </button>
+        <button class="btn-share" id="btn-share" disabled>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/>
+            <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/>
+            <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
+          </svg>
+          Share
+        </button>
+      </div>
     </div>
 
     <footer>No data is sent to any server. Everything runs in your browser.</footer>
@@ -252,6 +285,7 @@
       var placeholder = document.getElementById('placeholder');
       var btnDownload = document.getElementById('btn-download');
 
+      var btnShare    = document.getElementById('btn-share');
       var qr          = null;
       var debounceTimer = null;
 
@@ -267,6 +301,7 @@
         container.appendChild(placeholder);
         placeholder.style.display = 'flex';
         btnDownload.disabled = true;
+        btnShare.disabled = true;
       }
 
       function renderQR(text) {
@@ -291,6 +326,7 @@
         });
 
         btnDownload.disabled = false;
+        btnShare.disabled = false;
       }
 
       function onInput() {
@@ -339,8 +375,52 @@
         link.click();
       }
 
+      function getQRCanvas() {
+        return container.querySelector('canvas');
+      }
+
+      function canvasToBlob(canvas, callback) {
+        if (canvas.toBlob) {
+          canvas.toBlob(callback, 'image/png');
+        } else {
+          // Fallback for older browsers
+          var binary = atob(canvas.toDataURL('image/png').split(',')[1]);
+          var arr = new Uint8Array(binary.length);
+          for (var i = 0; i < binary.length; i++) arr[i] = binary.charCodeAt(i);
+          callback(new Blob([arr], { type: 'image/png' }));
+        }
+      }
+
+      function shareQR() {
+        var canvas = getQRCanvas();
+        if (!canvas) return;
+
+        var out = document.createElement('canvas');
+        var padding = 24;
+        out.width  = canvas.width  + padding * 2;
+        out.height = canvas.height + padding * 2;
+        var ctx = out.getContext('2d');
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, out.width, out.height);
+        ctx.drawImage(canvas, padding, padding);
+
+        canvasToBlob(out, function (blob) {
+          var file = new File([blob], 'qrcode.png', { type: 'image/png' });
+          if (navigator.canShare && navigator.canShare({ files: [file] })) {
+            navigator.share({ files: [file], title: 'QR Code' }).catch(function () {});
+          } else {
+            // Fallback: download
+            var link = document.createElement('a');
+            link.download = 'qrcode.png';
+            link.href = out.toDataURL('image/png');
+            link.click();
+          }
+        });
+      }
+
       input.addEventListener('input', onInput);
       btnDownload.addEventListener('click', downloadPNG);
+      btnShare.addEventListener('click', shareQR);
 
       // Auto-focus on load for desktop
       input.focus();
